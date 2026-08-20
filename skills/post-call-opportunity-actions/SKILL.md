@@ -1,6 +1,6 @@
 ---
 name: post-call-opportunity-actions
-description: Turns a completed customer call (Gong recording, Granola notes, or Zoom transcript) into the five things an AE actually needs before their next call — commitments made, follow-up actions, open questions, a proposed CRM update, and a follow-up email draft. Use this whenever a sales call, discovery call, demo, or customer meeting has just ended and its output needs to move into opportunity workflow, whenever someone asks to "process this call," "turn this call into next steps," "draft the follow-up," or "what do I owe this account," or whenever this skill is wired to fire automatically on a Gong/Granola call-end event. This is the operational half of the meeting-to-opportunity pipeline — always pair it with deal-signal-coaching's risk and discovery-gap read on the same call, but never block on it; this skill's output should ship to the rep even if the coaching skill has nothing to say. Every run also writes one row to the shared "Skill Usage Log" Notion database, success or failure, so skill usage across the whole system is tracked in one place.
+description: Turns a completed customer call (Gong recording, Granola notes, or Zoom transcript) into the five things an AE actually needs before their next call — commitments made, follow-up actions, open questions, a proposed CRM update, and a follow-up email draft. Use this whenever a sales call, discovery call, demo, or customer meeting has just ended and its output needs to move into opportunity workflow, whenever someone asks to "process this call," "turn this call into next steps," "draft the follow-up," or "what do I owe this account," or whenever this skill is wired to fire automatically on a Gong/Granola call-end event. This is the operational half of the meeting-to-opportunity pipeline — always pair it with deal-signal-coaching's risk and discovery-gap read on the same call, but never block on it; this skill's output should ship to the rep even if the coaching skill has nothing to say. This skill owns the row it creates in the shared "Opportunity Post-Call Actions" Notion database (deal-signal-coaching updates that same row rather than creating its own), and also writes a run record to the shared "Skill Usage Log," success or failure.
 ---
 
 # Post-Call Opportunity Actions
@@ -98,16 +98,45 @@ look like.
   Granola capture the same call differently on a material point, flag it in
   the draft rather than picking a version.
 
-## Step 6. Log the run
+## Step 6. Write the call record
 
-Every run writes one row to the shared Skill Usage Log, whether the call
-produced five clean outputs or nothing worth drafting, and whether the run
-succeeded or failed partway through. This isn't optional and isn't
-conditional on a good outcome.
+The five outputs land in the shared **Opportunity Post-Call Actions** Notion
+database, not just a chat draft. This is the actual delivery mechanism, not a
+log of the fact that this skill ran — that's Step 7.
+
+- Database: https://app.notion.com/p/a7bed23291f64c888cf7f4a435666ba5, data source `39bfce03-75ad-40a5-aa69-a6c1d4e3325b`
+
+**This skill owns row creation.** `deal-signal-coaching` runs on the same call
+and updates this same row rather than creating a second one — see that
+skill's write-back step. Before creating a row, query the data source for an
+existing row with a matching `Call ID` (defensive, in case of a re-run); if
+one exists, update it instead of creating a duplicate.
+
+Row properties to set:
+- `Call` (title): `"<Account/Opportunity> - <Motion short code> - <YYYY-MM-DD>"`, e.g. `"AlayaCare - FPT - 2026-08-20"`
+- `Call ID` (rich_text): the Gong or Granola call ID — this is the join key `deal-signal-coaching` will use to find this row, so it must be set and exact
+- `Account / Opportunity` (rich_text): account or opportunity name
+- `Salesforce Opportunity` (url): link to the opportunity if known
+- `Call Date` (date): the call date, `date:Call Date:is_datetime`: `0` unless time-of-day matters
+- `Call Source` (select): `"Gong"`, `"Granola"`, `"Zoom"`, or `"Multiple"` if sources disagreed and both were used
+- `Motion Assessed` (select): one of `"Full Platform Takeout"`, `"Finding What's New"`, `"Incident Management"`, `"Blueprint Deployment"`, `"Pro to Enterprise"`, `"Ambiguous"` — never leave this blank; use `"Ambiguous"` rather than guessing
+- `Commitments` (rich_text): one line per commitment — `<description> — owner: <owner> — due: <date or "not specified"> — "<source quote>"`. If none, write `"None"`, don't leave blank.
+- `Follow-up Actions` (rich_text): one line per action — `<description> — owner: <owner> — "<source quote>"`
+- `Open Questions` (rich_text): one line per question — `<question> — asked by: <person> — still open: <yes/no>`
+- `Proposed CRM Update` (rich_text): one line per field — `<field>: <proposed value> — evidence: "<quote>" — confidence: <high/medium/low>`, or `"None"` if the call supported no update
+- `Follow-up Email Draft` (rich_text): `Subject: <subject>` on the first line, blank line, then the body
+- `Source Notes` (rich_text): anything worth flagging — source disagreement, missing transcript, low-confidence extraction
+- `CRM Update Applied` (checkbox): leave unchecked. This is ticked manually by a human after they approve and push the proposed update, never by this skill.
+- `Run By` (people): the rep who owns the opportunity, not whoever wired the automation
+
+## Step 7. Log the run
+
+Every run also writes one row to the shared Skill Usage Log — this tracks
+that the skill executed at all, separate from what it produced. Do this
+whether the call produced five clean outputs or nothing worth drafting, and
+whether the run succeeded or failed partway through.
 
 Get the run timestamp: `TZ=America/Chicago date -Iseconds`.
-
-Load Notion tools via tool search if deferred, then write one row:
 
 - Database: https://app.notion.com/p/eae2c789d88040029296dfa1bdb5d481, data source `f43c363f-edc7-461e-8fd3-6c835239f247`
 - Row properties:
@@ -115,15 +144,15 @@ Load Notion tools via tool search if deferred, then write one row:
   - `Skill` (select): `"post-call-opportunity-actions"`
   - `date:Run Timestamp:start`: the timestamp above; `date:Run Timestamp:is_datetime`: `1`
   - `Trigger` (select): `"Scheduled"` if fired by the call-end webhook, `"Manual"` if invoked directly
-  - `Run By` (people): resolve the AE the call belongs to via Notion's `fetch` tool with id `"self"` if this is a self-serve invocation, otherwise attribute to the rep who owns the opportunity, not to whoever wired the automation. Never hardcode a specific person.
-  - `Status` (select): `"Success"` if the five outputs were produced (even if some were empty, e.g. no open questions), `"Error"` if the call couldn't be pulled or parsed at all
+  - `Run By` (people): same resolution as Step 6
+  - `Status` (select): `"Success"` if the five outputs were produced (even if some were empty), `"Error"` if the call couldn't be pulled or parsed at all
   - `Notes` (rich_text): one line, e.g. `"3 commitments, 1 CRM field update proposed, email drafted"` or `"Call transcript unavailable: <short reason>"`
 
-Do this before ending the turn, not conditionally on how the call went. If the
-Notion write itself fails, say so plainly in the draft handoff rather than
-silently dropping it — the likely first-use cause is that the Claude
-connection hasn't been added to the Skill Usage Log database yet (Notion:
-open the database, ••• menu, Connections, add Claude).
+Do both writes before ending the turn, not conditionally on how the call
+went. If either Notion write fails, say so plainly rather than silently
+dropping it — the likely first-use cause is that the Claude connection
+hasn't been added to the relevant database yet (Notion: open the database,
+••• menu, Connections, add Claude).
 
 ## What this skill deliberately does not do
 

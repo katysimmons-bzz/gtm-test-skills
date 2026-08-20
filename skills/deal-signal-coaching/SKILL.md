@@ -1,6 +1,6 @@
 ---
 name: deal-signal-coaching
-description: Reads a completed customer call against Honeycomb's Net New Sales Playbook and surfaces deal risks or blockers, discovery gaps, and call coaching / quality feedback — but only when there's actually a signal worth surfacing, not as a running commentary on every call. Use this whenever someone asks "what's the risk on this deal," "did I miss anything in discovery," "coach me on this call," "score this against MEDDPICC," or whenever this skill is wired to run automatically after post-call-opportunity-actions on the same Gong/Granola/Zoom call. Do not use this to generate a report for every single call by default — check the Delivery Gate below first. This is the evaluative half of the meeting-to-opportunity pipeline; pair it with post-call-opportunity-actions but never let it block that skill's output. Every run also writes one row to the shared "Skill Usage Log" Notion database, including gated-silent runs, so skill usage across the whole system is tracked in one place.
+description: Reads a completed customer call against Honeycomb's Net New Sales Playbook and surfaces deal risks or blockers, discovery gaps, and call coaching / quality feedback — but only when there's actually a signal worth surfacing, not as a running commentary on every call. Use this whenever someone asks "what's the risk on this deal," "did I miss anything in discovery," "coach me on this call," "score this against MEDDPICC," or whenever this skill is wired to run automatically after post-call-opportunity-actions on the same Gong/Granola/Zoom call. Do not use this to generate a report for every single call by default — check the Delivery Gate below first. This is the evaluative half of the meeting-to-opportunity pipeline; pair it with post-call-opportunity-actions but never let it block that skill's output. This skill updates the same row post-call-opportunity-actions created in the shared "Opportunity Post-Call Actions" Notion database rather than creating a second row per call, and also writes a run record to the shared "Skill Usage Log," including gated-silent runs.
 ---
 
 # Deal Signal & Coaching
@@ -92,16 +92,40 @@ from this skill's first release, not bundled into it by default.
   motion the deal is in, that disagreement is worth surfacing on its own; it
   usually means the CRM's Motion field is stale.
 
-## Step 6. Log the run
+## Step 6. Update the call record — do not create a second row
 
-Every run writes one row to the shared Skill Usage Log, including the runs
-where the Delivery Gate stops output entirely. A gated-and-silent run is still
-a run, and needs to show up in the log the same as one that surfaced a flag —
-otherwise the log undercounts how often this actually executes.
+This skill does **not** own row creation in the **Opportunity Post-Call
+Actions** database. `post-call-opportunity-actions` creates the row for a
+given call and sets `Call ID`; this skill finds that row and updates it.
+
+- Database: https://app.notion.com/p/a7bed23291f64c888cf7f4a435666ba5, data source `39bfce03-75ad-40a5-aa69-a6c1d4e3325b`
+
+1. Query the data source for the row where `Call ID` matches this call's Gong
+   or Granola call ID.
+2. **If a row exists**, update it — never insert a new row for a call that
+   already has one.
+3. **If no row exists** (this skill ran first, or ran standalone), create one
+   with `Call`, `Call ID`, `Account / Opportunity`, `Call Date`, `Call
+   Source`, and `Motion Assessed` populated at minimum, so
+   `post-call-opportunity-actions` can find and complete it later instead of
+   creating a duplicate.
+
+Properties this skill is responsible for:
+- `Deal Risk / Blockers` (rich_text): one line per flag — `<risk/blocker> — evidence: "<quote>"`. Only populate if the Delivery Gate cleared.
+- `Discovery Gaps` (rich_text): one line per gap — `<missing question or signal> — why it's diagnostic for this motion`. Only populate if the Delivery Gate cleared.
+- `Coaching Feedback` (rich_text): the coaching note, grounded in transcript evidence. Only populate if the Delivery Gate cleared.
+- `Coaching Gate Status` (select): `"Flagged"` if the gate cleared and the three fields above are populated, `"Gate Not Cleared"` if this skill ran and found nothing worth surfacing — leave the three text fields blank in that case, don't pad them.
+- `Motion Assessed` (select): only set this if the row didn't already have it set (i.e. this skill ran first). If `post-call-opportunity-actions` already set a different motion than what this skill's own Structure Gate check found, don't silently overwrite it — write the disagreement into `Source Notes` instead.
+
+## Step 7. Log the run
+
+Every run also writes one row to the shared Skill Usage Log — this tracks
+that the skill executed, separate from what it found. Do this including runs
+where the Delivery Gate stops output entirely; a gated-and-silent run is
+still a run, and needs to show up here the same as one that surfaced a flag,
+otherwise this log undercounts how often the skill actually executes.
 
 Get the run timestamp: `TZ=America/Chicago date -Iseconds`.
-
-Load Notion tools via tool search if deferred, then write one row:
 
 - Database: https://app.notion.com/p/eae2c789d88040029296dfa1bdb5d481, data source `f43c363f-edc7-461e-8fd3-6c835239f247`
 - Row properties:
@@ -109,15 +133,15 @@ Load Notion tools via tool search if deferred, then write one row:
   - `Skill` (select): `"deal-signal-coaching"`
   - `date:Run Timestamp:start`: the timestamp above; `date:Run Timestamp:is_datetime`: `1`
   - `Trigger` (select): `"Scheduled"` if fired by the call-end webhook, `"Manual"` if invoked directly
-  - `Run By` (people): attribute to the rep who owns the opportunity the call belongs to, not to whoever wired the automation. Resolve via Notion's `fetch` tool with id `"self"` only for genuinely self-serve invocations. Never hardcode a specific person.
+  - `Run By` (people): attribute to the rep who owns the opportunity, not whoever wired the automation. Never hardcode a specific person.
   - `Status` (select): `"Success"` for both a gated-silent run and a run that surfaced a flag, `"Error"` only if the call itself couldn't be read or the motion couldn't be identified at all
   - `Notes` (rich_text): one line, distinguishing the two real outcomes, e.g. `"Gate not cleared, no flag surfaced"` or `"1 disqualifier flagged (no VP+ sponsor, FWN motion), 1 discovery gap"`
 
-Do this before ending the turn regardless of outcome. If the Notion write
-itself fails, say so plainly rather than silently dropping it — the likely
-first-use cause is that the Claude connection hasn't been added to the Skill
-Usage Log database yet (Notion: open the database, ••• menu, Connections, add
-Claude).
+Do both writes before ending the turn regardless of outcome. If either
+Notion write fails, say so plainly rather than silently dropping it — the
+likely first-use cause is that the Claude connection hasn't been added to
+the relevant database yet (Notion: open the database, ••• menu, Connections,
+add Claude).
 
 ## Open items before this goes live
 

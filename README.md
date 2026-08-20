@@ -51,15 +51,38 @@ Source of truth: [Net New Sales Playbook](https://app.notion.com/p/398ef7d73d398
 (Sales Playbooks > Revenue Enablement), including the Motion Bucketing —
 Decision Logic sub-page and the Land & Expand motion sub-pages.
 
-## Skill Usage Log
+## Opportunity Post-Call Actions (the actual delivery destination)
 
-Both skills write one row per run to Honeycomb's shared Skill Usage Log
+Both skills write into one shared Notion database, one row per call:
+https://app.notion.com/p/a7bed23291f64c888cf7f4a435666ba5
+
+- `post-call-opportunity-actions` creates the row: commitments, follow-up
+  actions, open questions, proposed CRM update, email draft, motion assessed.
+- `deal-signal-coaching` updates the same row rather than creating a second
+  one, keyed on `Call ID`: deal risk/blockers, discovery gaps, coaching
+  feedback, and a `Coaching Gate Status` field so a gated-silent run is
+  visibly different from one that hasn't run yet.
+- `CRM Update Applied` is a manual checkbox, never ticked by either skill —
+  it's how a human closes the loop after actually pushing the change.
+
+**Known tradeoff, not fully resolved:** Notion permissions are database-level,
+not field-level. Putting both skills' output in one database means anyone
+with access to it can see the coaching fields too, which is in tension with
+`deal-signal-coaching`'s rep-only default. Until there's a real answer, keep
+this database's sharing scoped narrowly rather than opened to the whole GTM
+team — that's a workspace-sharing decision, not something either skill file
+can enforce.
+
+## Skill Usage Log (the run log, separate from the above)
+
+Both skills also write one row per run to Honeycomb's shared Skill Usage Log
 (Notion), following the same pattern as `daily-schedule` and the rest of the
 department standup skills: run timestamp, trigger type, who it ran for,
-success/error, and a one-line note — logged whether the run produced
-something notable or not. `deal-signal-coaching`'s gated-silent runs still get
-logged, since a gate that fires correctly is a real outcome, not a non-event.
-Both skill names are now registered as `Skill` select options on the shared
+success/error, and a one-line note. This tracks that a skill executed at all;
+it is not where the call's actual content lives, that's Opportunity Post-Call
+Actions above. `deal-signal-coaching`'s gated-silent runs still get logged
+here too, since a gate that fires correctly is a real outcome, not a
+non-event. Both skill names are registered as `Skill` select options on this
 database rather than falling into the `other` catch-all.
 
 ## Open items (not resolved by these skill files)
