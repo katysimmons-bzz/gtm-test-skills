@@ -65,7 +65,7 @@ database rather than falling into the `other` catch-all.
 ## Open items (not resolved by these skill files)
 
 1. **Visibility on deal-signal-coaching.** Shipped rep-only by default. Manager
-   visibility is a governance call for Katy/Emily, not a technical one, and
+   visibility is a governance call for Katy/Arno, not a technical one, and
    probably shouldn't be bundled into the same release as v1.
 2. **Composition vs. duplication.** deal-signal-coaching should call the
    existing MEDDPICC Scorecard and AE Discovery Coaching skills rather than
