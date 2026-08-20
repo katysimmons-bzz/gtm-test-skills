@@ -67,8 +67,8 @@ changes one of these three fields — not a freeform "update Salesforce" note.
 
 ## Identifiers / Qualifiers / Disqualifiers by motion
 
-Use this table to judge whether a next step, a commitment, or a proposed CRM
-update actually fits the motion the deal is in.
+Use this table to judge whether a next step, a commitment, a proposed CRM
+update, a risk flag, or a discovery gap actually fits the motion the deal is in.
 
 | Motion | Identifiers (bucket it) | Qualifiers (win-likelihood) | Disqualifiers |
 |---|---|---|---|
@@ -85,11 +85,3 @@ The single most important qualifying question: is the prospect talking about
 conversation. If the prospect is only discussing evals, prompt tuning, or offline
 testing, that is a "too early" signal, not a disqualifier. It belongs in nurture
 until a ship date exists — not in every-call risk escalation.
-
-## What this skill should NOT try to be
-
-There is already a MEDDPICC Scorecard skill and an AE Discovery Coaching skill in
-the GTM Pilot system. This skill produces the operational five (commitments,
-follow-up actions, open questions, proposed CRM updates, follow-up email draft).
-It should hand off to — not duplicate — the scoring and coaching logic that
-already exists. See the `deal-signal-coaching` skill for how that handoff works.

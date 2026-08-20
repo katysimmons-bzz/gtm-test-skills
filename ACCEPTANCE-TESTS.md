@@ -1,16 +1,22 @@
 # GTM Test Skills Acceptance Tests
 
-These tests exist to keep the two skills inside their intended boundaries.
-The point is not "did the output sound smart." The point is "did the system
-behave predictably, with the right split between operational output and
-evaluative output, and without inventing work."
+These tests exist to keep `post-call-opportunity-actions` inside its intended
+boundaries. The point is not "did the output sound smart." The point is "did
+the system behave predictably, with the right split between operational
+output and evaluative output, and without inventing work."
+
+This skill was originally two separate skills (`post-call-opportunity-actions`
+and `deal-signal-coaching`) and has since been merged into one, with the old
+skill boundary now enforced as an internal tiering (operational vs.
+evaluative, gated by the Delivery Gate) instead. These tests are written
+against the merged skill.
 
 ## How to use this file
 
-For each test case, run both skills against the same call artifact and score
-pass or fail. A pass means the behavior holds consistently, not once by luck.
-If a test fails, fix the boundary or rule that caused the failure before adding
-new prompt prose elsewhere.
+For each test case, run the skill against the call artifact and score pass or
+fail. A pass means the behavior holds consistently, not once by luck. If a
+test fails, fix the boundary or rule that caused the failure before adding new
+prompt prose elsewhere.
 
 ## Test 1. Open questions stay literal
 
@@ -19,12 +25,12 @@ There are also several obvious discovery questions the rep should have asked
 but never did.
 
 **Expected behavior:**
-- `post-call-opportunity-actions` includes only the actually asked but still
+- The operational output includes only the actually asked but still
   unresolved item in `Open Questions`.
-- `deal-signal-coaching` captures the missing discovery as a discovery gap if
-  the motion makes that question diagnostic.
-- `post-call-opportunity-actions` does not smuggle "questions the rep should
-  have asked" into its operational output.
+- The evaluative output captures the missing discovery as a discovery gap if
+  the motion makes that question diagnostic and the Delivery Gate clears.
+- The operational output does not smuggle "questions the rep should have
+  asked" into `Open Questions`.
 
 ## Test 2. No ceremonial coaching
 
@@ -32,10 +38,10 @@ but never did.
 discovery miss, and no strong coaching signal.
 
 **Expected behavior:**
-- `deal-signal-coaching` sets `Coaching Gate Status` to `Gate Not Cleared`.
+- The skill sets `Coaching Gate Status` to `Gate Not Cleared`.
 - It does not invent a blocker, soft warning, or generic improvement note just
-  to justify its own existence.
-- `post-call-opportunity-actions` still produces its five outputs.
+  to justify running the evaluative tier.
+- The five operational outputs still ship regardless.
 
 ## Test 3. Missing positive evidence is not automatically a risk
 
@@ -44,7 +50,7 @@ been confirmed, but there is no transcript evidence of a contradiction,
 disqualifier, or decision-blocking omission.
 
 **Expected behavior:**
-- `deal-signal-coaching` does not flag the absence alone as deal risk.
+- The evaluative output does not flag the absence alone as deal risk.
 - It may note ambiguity only when the playbook timing or motion logic makes it
   materially relevant.
 - Risk language requires transcript-grounded evidence, not missing optimism.
@@ -55,35 +61,33 @@ disqualifier, or decision-blocking omission.
 `Finding What's New` motion and once as a valid `Blueprint Deployment` motion.
 
 **Expected behavior:**
-- `deal-signal-coaching` changes its discovery-gap output based on motion.
+- The discovery-gap output changes based on motion.
 - Questions that are diagnostic for one motion are not treated as universal.
-- `post-call-opportunity-actions` still drafts the CRM update and email in a way
-  that fits the assessed motion.
+- The operational output still drafts the CRM update and email in a way that
+  fits the assessed motion.
 
 ## Test 5. No duplicate call rows
 
-**Scenario:** Both skills run on the same call ID, and then one of them is
-re-run.
+**Scenario:** The skill runs on a call, and is then re-run on the same call ID
+(e.g. a retry after a partial failure, or a manual re-invocation).
 
 **Expected behavior:**
 - Only one row exists in the Opportunity Post-Call Actions database for that
   call ID.
-- `post-call-opportunity-actions` creates or updates the shared row rather than
-  duplicating it.
-- `deal-signal-coaching` updates that same row instead of creating a competing
-  partial row.
+- The skill queries for an existing row by `Call ID` and updates it rather
+  than inserting a duplicate.
 
-## Test 6. Manual invocation does not create side effects
+## Test 6. Manual invocation does not create side effects it can't back up
 
-**Scenario:** A user runs either skill manually in analysis mode outside the
+**Scenario:** A user runs the skill manually in analysis mode outside the
 automated call-end pipeline.
 
 **Expected behavior:**
 - The skill can still analyze and draft its output.
 - It does not pretend the write happened if the automation context or database
   write step is not available.
-- Side effects are reserved for the actual automated workflow or clearly stated
-  write-capable runs.
+- Side effects are reserved for the actual automated workflow or clearly
+  stated write-capable runs.
 
 ## Test 7. CRM updates stay evidence-bound
 
@@ -92,8 +96,7 @@ the motion is clear and a compelling event is mentioned, but there is no
 transcript support for a stage change.
 
 **Expected behavior:**
-- `post-call-opportunity-actions` proposes only the fields the call actually
-  supports.
+- The operational output proposes only the fields the call actually supports.
 - It does not suggest a stage change, owner change, amount change, or close
   action without explicit evidence.
 - Each proposed CRM update includes field-level evidence and confidence.
@@ -116,7 +119,20 @@ promise.
 customer accepted a next step or whether a specific commitment was made.
 
 **Expected behavior:**
-- `post-call-opportunity-actions` flags the disagreement in `Source Notes`.
+- The operational output flags the disagreement in `Source Notes`.
 - It does not silently choose whichever version produces the cleaner summary.
-- Any downstream risk or coaching output that depends on the disputed point is
-  qualified accordingly.
+- Any evaluative output that depends on the disputed point is qualified
+  accordingly.
+
+## Test 10. Operational output never waits on the evaluative gate
+
+**Scenario:** The call is ambiguous enough that the Delivery Gate can't be
+resolved quickly (e.g. the motion is unclear).
+
+**Expected behavior:**
+- The five operational outputs still ship on their normal timeline.
+- The evaluative tier reports "gate not cleared" or flags the motion as
+  ambiguous rather than blocking or delaying the operational write.
+- A merged skill only works if this guarantee survives the merge — this test
+  exists specifically to catch a regression where one write path starts
+  blocking on the other.
